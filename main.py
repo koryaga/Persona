@@ -1,12 +1,11 @@
 import asyncio
 import aiofiles
-import logging
-import logfire
-from pydantic_ai import Agent, ModelSettings, UsageLimits
+#import logging
+#import logfire
+import argparse
+from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic import BaseModel
-from pydantic_ai.mcp import MCPServerStdio
 import os
 from dotenv import load_dotenv
 import subprocess
@@ -24,14 +23,13 @@ SANDBOX_CONTAINER_NAME = os.getenv('SANDBOX_CONTAINER_NAME',"sandbox")
 #logfire.configure(send_to_logfire=False)
 #logfire.instrument_pydantic_ai()
 #logfire.instrument_httpx(capture_all=True)
-
 #logging.basicConfig(level=logging.INFO)
 
 openai_model = os.getenv('OPENAI_MODEL', 'cogito:14b') # use Cogito v1 famaily 
 openai_api_key = os.getenv('OPENAI_API_KEY', os.getenv('OPENAI_KEY', 'ollama'))
 openai_api_base = os.getenv('OPENAI_API_BASE', os.getenv('OPENAI_BASE', 'http://localhost:11434/v1'))
 
-# Use default ModelSettings (no temperature/top_p overrides)
+# Use default ModelSettings
 model = OpenAIChatModel(
     openai_model,
     provider=OpenAIProvider(
@@ -85,6 +83,7 @@ def find_and_parse_skills():
     return '\n'.join(skills_xml)
 
 
+# load system prompt
 base_dir = os.path.dirname(os.path.abspath(__file__))
 instructions_path = os.path.join(base_dir, 'instructions.md')
 with open(instructions_path, 'r') as f:
@@ -189,27 +188,46 @@ async def load_skill(skill: str) -> str:
                     Skill read: {skill}
                 """
 
-def start_container(container_name: str, image_name: str) -> bool:
+def start_container(container_name: str, image_name: str, mnt_dir: str = None, skills_dir: str = None) -> bool:
     """
     Start a Docker container with the specified parameters.
     
     Args:
         container_name (str): Name for the container
         image_name (str): Name of the Docker image to use
+        mnt_dir (str): Path to mount directory (default: mnt)
+        skills_dir (str): Path to skills directory (default: skills)
         
     Returns:
         bool: True if container started successfully, False otherwise
     """
     try:
+        # Use base_dir as default, fall back to current directory
+        if mnt_dir is None:
+            mnt_dir = ('mnt')
+        if skills_dir is None:
+            skills_dir = ('skills')
+        
+        # Expand user and convert to absolute paths so Docker treats them as host directories
+        mnt_dir = os.path.abspath(os.path.expanduser(mnt_dir))
+        skills_dir = os.path.abspath(os.path.expanduser(skills_dir))
+        
         # Build the docker run command
         cmd = [
             "docker", "run", "-d", "--rm",
-            "-v", f"{os.getcwd()}/mnt:/mnt",
-            "-v", f"{os.getcwd()}/skills:/skills",
+        ]
+        
+        # Only add volume mounts if directories exist
+        if os.path.isdir(mnt_dir):
+            cmd.extend(["-v", f"{mnt_dir}:/mnt"])
+        if os.path.isdir(skills_dir):
+            cmd.extend(["-v", f"{skills_dir}:/skills"])
+        
+        cmd.extend([
             "--name", container_name,
             image_name,
             "sleep", "infinity"
-        ]
+        ])
         
         # Execute the command
         result = subprocess.run(
@@ -280,8 +298,14 @@ def stop_container(container_name: str) -> bool:
 async def main():
     print("[DEBUG] Starting main function")
     
+    # Parse command-line args for mount paths
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mnt-dir", dest="mnt_dir", help="Local directory to mount into container in /mnt", default=None)
+    parser.add_argument("--skills-dir", dest="skills_dir", help="Local skills directory to mount into container", default=None)
+    args = parser.parse_args()
+
     # Start the container when the program starts
-    if not start_container(SANDBOX_CONTAINER_NAME, SANDBOX_CONTAINER_IMAGE ):
+    if not start_container(SANDBOX_CONTAINER_NAME, SANDBOX_CONTAINER_IMAGE, mnt_dir=args.mnt_dir, skills_dir=args.skills_dir):
         return False
     
     # Register cleanup function to stop container on exit
