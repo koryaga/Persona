@@ -4,13 +4,13 @@
 
 Persona is a lightweight AI agent running from cli that:
 - performs general user tasks, like document processing, internet search and data manipulation
-- supports [Anthropic skills](https://agentskills.io/home) from the `skills/` directory to satisfy user requests
+- supports [Anthropic skills](https://agentskills.io/home) to satisfy user requests
 
 ## Key features
 
-- exchanges files with the user via the folder (see `--mnt-dir`)
 - Runs shell commands and executes generated Python code inside a disposable Docker Ubuntu sandbox container
-- Loads and exposes skill files to the agent
+- Loads and exposes skill to the agent (see `--skills-dir`)
+- Exchanges files with the user via the folder (see `--mnt-dir`)
 
 ## Quick start
 
