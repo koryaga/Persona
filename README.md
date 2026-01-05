@@ -37,9 +37,9 @@ uv sync
 ```bash
 docker build -t ubuntu.sandbox .
 ```
-*Optional*. You may specify general `ubuntu` container name or your own image using `SANDBOX_CONTAINER_IMAGE` env.
+Optionally you may specify general `ubuntu` container name or your own image using `SANDBOX_CONTAINER_IMAGE` env.
 
-4. Specify [search API](https://github.com/koryaga/Persona/blob/main/instructions.md?plain=1#L9) in a _curl format_
+4. *Optional*. Specify [search API](https://github.com/koryaga/Persona/blob/main/instructions.md?plain=1#L9) in a _curl format_
 - Example for [travily](https://www.tavily.com/):
 ```bash
    curl -X POST https://api.tavily.com/search -H 'Content-Type: application/json' -H 'Authorization: Bearer _TRAVILY_TOKEN_' -d '{
@@ -47,7 +47,7 @@ docker build -t ubuntu.sandbox .
     "include_answer": "advanced"
     }'
 ```
-*Optional*. Free duckduckgo API search is used by default.
+Free duckduckgo API search is used by default.
 
 5. Run the agent:
 
