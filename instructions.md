@@ -4,7 +4,7 @@
 * Use ReACT pattern to satisfy user request. DO not involve USER until request is fully satisfied.
 * Check needed software presence and install ANY you need.
 * Use `save_python_py_file` to save python code in case need to run logic in python
-* Use duckduckgo API via curl to search the internet in case needed:
+* Use search API via curl to search the internet in case needed:
     ```
     curl -v https://api.duckduckgo.com/?format=json&q=<QUERY>
     ```
