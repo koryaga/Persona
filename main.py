@@ -1,7 +1,6 @@
+#!/usr/bin/env python3
 import asyncio
 import aiofiles
-#import logging
-#import logfire
 import argparse
 from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -13,6 +12,8 @@ import glob
 import re
 import atexit
 import tempfile
+#import logging
+#import logfire
 
 load_dotenv('.env')
 
@@ -25,9 +26,12 @@ SANDBOX_CONTAINER_NAME = os.getenv('SANDBOX_CONTAINER_NAME',"sandbox")
 #logfire.instrument_httpx(capture_all=True)
 #logging.basicConfig(level=logging.INFO)
 
-openai_model = os.getenv('OPENAI_MODEL', 'cogito:14b') # use Cogito v1 famaily 
-openai_api_key = os.getenv('OPENAI_API_KEY', os.getenv('OPENAI_KEY', 'ollama'))
-openai_api_base = os.getenv('OPENAI_API_BASE', os.getenv('OPENAI_BASE', 'http://localhost:11434/v1'))
+openai_model = os.getenv('OPENAI_MODEL', 'cogito:14b') # use Cogito v1 family 
+openai_api_key = os.getenv('OPENAI_API_KEY', 'ollama')
+openai_api_base = os.getenv('OPENAI_API_BASE', 'http://localhost:11434/v1')
+
+skills_dir = 'skills'
+mnt_dir = 'mnt'
 
 # Use default ModelSettings
 model = OpenAIChatModel(
@@ -71,7 +75,7 @@ def find_and_parse_skills():
     skills_xml = []
     
     # Find all SKILL.md files recursively
-    skill_files = glob.glob('skills/**/SKILL.md', recursive=True)
+    skill_files = glob.glob(f"{skills_dir}/**/SKILL.md", recursive=True)
 
     for skill_file in skill_files:
         try:
@@ -89,7 +93,18 @@ instructions_path = os.path.join(base_dir, 'instructions.md')
 with open(instructions_path, 'r') as f:
     system_prompt = f.read()
 
+# Parse command-line args for mount paths
+parser = argparse.ArgumentParser()
+parser.add_argument("--mnt-dir", dest="mnt_dir", help="Local directory to mount into container in /mnt", default=None)
+parser.add_argument("--skills-dir", dest="skills_dir", help="Local skills directory to mount into container", default=None)
+args = parser.parse_args()
+if args.skills_dir:
+    skills_dir = args.skills_dir
+if args.mnt_dir:
+    mnt_dir = args.mnt_dir
+    
 agent = Agent(model,
+              retries=5,
               instructions= 
               "Enable deep thinking subroutine. " + #Only for CogitoV1 models to enable deep thinking
               f"""
@@ -136,9 +151,9 @@ async def run_cmd(cmd: str) -> str:
         return f"Unexpected error: {str(e)}"
 
 @agent.tool_plain
-async def save_python_py_file(filename:str, file_body: str) -> bool:
+async def save_text_file(filename:str, file_body: str) -> bool:
     """
-    Write a python code to /tmp/{filename}
+    Write a text file/python code/shell script to /tmp/{filename}
     Returns True on success, False on failure.
     """
     print(f"\033[94m[DEBUG][FILE] {filename}\033[0m")
@@ -164,7 +179,7 @@ async def save_python_py_file(filename:str, file_body: str) -> bool:
         # Clean up local temp file
         os.unlink(tmp_path)
         
-        print(f"\033[92m[SUCCESS] {filename} copied to container /tmp/\033[0m")
+        #print(f"\033[92m[SUCCESS] {filename} copied to container /tmp/\033[0m")
         return True
     except Exception as e:
         print(f"\033[91m[ERROR] {str(e)}\033[0m")
@@ -180,7 +195,7 @@ async def load_skill(skill: str) -> str:
     """
     print(f"\033[93m[DEBUG][SKILL] {skill}\033[0m")
 
-    async with aiofiles.open(f"skills/{skill}/SKILL.md", "r") as f:
+    async with aiofiles.open(f"{skills_dir}/{skill}/SKILL.md", "r") as f:
         content = await f.read()
         return f""" Reading: {skill}
                     Base directory: /skills
@@ -188,7 +203,7 @@ async def load_skill(skill: str) -> str:
                     Skill read: {skill}
                 """
 
-def start_container(container_name: str, image_name: str, mnt_dir: str = None, skills_dir: str = None) -> bool:
+def start_container(container_name: str, image_name: str, mnt_dir: str , skills_dir: str ) -> bool:
     """
     Start a Docker container with the specified parameters.
     
@@ -202,11 +217,6 @@ def start_container(container_name: str, image_name: str, mnt_dir: str = None, s
         bool: True if container started successfully, False otherwise
     """
     try:
-        # Use base_dir as default, fall back to current directory
-        if mnt_dir is None:
-            mnt_dir = ('mnt')
-        if skills_dir is None:
-            skills_dir = ('skills')
         
         # Expand user and convert to absolute paths so Docker treats them as host directories
         mnt_dir = os.path.abspath(os.path.expanduser(mnt_dir))
@@ -298,14 +308,9 @@ def stop_container(container_name: str) -> bool:
 async def main():
     print("[DEBUG] Starting main function")
     
-    # Parse command-line args for mount paths
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mnt-dir", dest="mnt_dir", help="Local directory to mount into container in /mnt", default=None)
-    parser.add_argument("--skills-dir", dest="skills_dir", help="Local skills directory to mount into container", default=None)
-    args = parser.parse_args()
 
     # Start the container when the program starts
-    if not start_container(SANDBOX_CONTAINER_NAME, SANDBOX_CONTAINER_IMAGE, mnt_dir=args.mnt_dir, skills_dir=args.skills_dir):
+    if not start_container(SANDBOX_CONTAINER_NAME, SANDBOX_CONTAINER_IMAGE, mnt_dir, skills_dir ):
         return False
     
     # Register cleanup function to stop container on exit

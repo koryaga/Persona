@@ -21,7 +21,7 @@ Prerequisites: Docker and Python 3.13+.
 Below are defaults for [openrouter](https://openrouter.ai/). Any OPENAI compatible, including local ollama, is supported:
 ```bash
 OPENAI_API_KEY=your-api-key
-OPENAI_API_BASE=https://openrouter.ai/api/v
+OPENAI_API_BASE=https://openrouter.ai/api/v1
 OPENAI_MODEL=nex-agi/deepseek-v3.1-nex-n1:free
 ```
 
